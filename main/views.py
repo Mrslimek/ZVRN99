@@ -18,7 +18,7 @@ def root(request):
             else:
                 ReceivedDataORM.objects.bulk_create(model_instances)
                 messages.success(request, "Данные успешно сохранены")
-                return render(request, "index.html", {"form": form})
+                return render(request, "upload_form.html", {"form": form})
     return render(request, "upload_form.html", {"form": form})
 
 

@@ -17,8 +17,6 @@ cd ZVRN99
 uv sync
 ```
 
----
-
 ## 4. Создание `.env` файла с переменными окружения
 Создайте файл `.env` в корневой папке проекта и добавьте в него следующие параметры, заменив значения на свои:
 
@@ -32,9 +30,20 @@ DJANGO_SECRET = "<секретный-ключ>"
 DEBUG = False
 ```
 
----
+## 5. Настройте CORS в `config.settings`:
+```
+CORS_ALLOWED_ORIGINS = [
+    "http://адрес_nginx:<порт>",
+    "http://адрес_nginx:<порт>"
+]
 
-## 5. Настройка `gunicorn_config.py`
+CSRF_TRUSTED_ORIGINS = [
+    "http://адрес_nginx:<порт>",
+    "http://адрес_nginx:<порт>",
+]
+```
+
+## 6. Настройка `gunicorn_config.py`
 В директории `config/` настройте `gunicorn_config.py`:
 
 ```python
@@ -60,9 +69,7 @@ limit_request_field_size = 0
 raw_env = 'DJANGO_SETTINGS_MODULE=config.settings'
 ```
 
----
-
-## 6. Настройка `nginx`
+## 7. Настройка `nginx`
 В конфигурации Nginx `/etc/nginx/nginx.conf` настройте следующее:
 
 ```nginx
@@ -109,6 +116,39 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+            # Передача CSRF-токена и cookies
+            proxy_set_header X-CSRF-Token $http_x_csrf_token;
+            proxy_set_header Cookie $http_cookie;
+
+            # Передача заголовков Origin и Referer
+            proxy_set_header Origin $http_origin;
+            proxy_set_header Referer $http_referer;
+
+            # CORS-настройки
+            # Проверяем, пришёл ли запрос с разрешённого источника.
+            # Если да, сохраняем его в переменной $cors_origin, чтобы использовать в CORS-настройках.
+            # Например: клиент отправляет запрос. Nginx устанавливает заголовок: 
+            `Access-Control-Allow-Origin: Адрес клиента`.
+            # Соответственно, если адреса нет в разрешенных, то браузер блокирует запрос
+
+            set $cors_origin "";
+            if ($http_origin ~* "^https?://(ВАШ_АДРЕС_NGINX:ПОРТ)$") {
+                set $cors_origin $http_origin;
+            }
+            
+            add_header Access-Control-Allow-Origin "$cors_origin";
+            add_header Access-Control-Allow-Headers "X-CSRF-Token, Content-Type, Authorization, X-Requested-With";
+            add_header Access-Control-Allow-Methods "GET, POST, OPTIONS";
+            add_header Access-Control-Allow-Credentials "true";
+
+            # Отключение автоматических редиректов
+            proxy_redirect off;
+
+            # Обработка preflight-запросов CORS
+            if ($request_method = OPTIONS) {
+                return 204;
+            }
         }
 
         # Адрес статики, по которому nginx будет отдавать статику
@@ -125,12 +165,16 @@ sudo nginx -t  # Проверка на наличие синтаксически
 sudo service nginx restart  # Для systemd использовать systemctl
 ```
 
----
-
-## 7. Запуск проекта
+## 8. Запуск проекта
 Удостовериться, что Nginx работает:
 ```bash
 sudo service nginx status  # Для systemd использовать systemctl
+```
+
+### Миграции:
+```bash
+uv run manage.py makemigrations
+uv run manage.py migrate
 ```
 
 ### Сбор статики в STATIC_ROOT:
