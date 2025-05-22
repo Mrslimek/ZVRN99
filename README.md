@@ -72,6 +72,12 @@ raw_env = 'DJANGO_SETTINGS_MODULE=config.settings'
 ## 7. Настройка `nginx`
 В конфигурации Nginx `/etc/nginx/nginx.conf` настройте следующее:
 
+    ## Если запускаете через https(443), то надо создать сертификат:
+    `sudo mkdir -p /etc/nginx/ssl
+     openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout /etc/nginx/ssl/nginx.key \
+        -out /etc/nginx/ssl/nginx.crt`
+
 ```nginx
 # Пользователя стоит использовать того же, от которого работает и gunicorn
 # Стоит использовать пользователя, у которого ограниченные полномочия, не root
@@ -108,8 +114,14 @@ http {
     # include /etc/nginx/sites-enabled/*;
 
     server {
-        listen <Внешний порт, который слушает nginx>; # Например, listen 80 для http или 443 для https
-        server_name < Домен вашего сервиса >; # Например, server_name www.google.com
+        # Например, listen 80 для http или 443 для https
+        listen <Внешний порт, который слушает nginx> ssl (ЕСЛИ СОЗДАЛИ САМОПОДПИСАННЫЕ СЕРТФИКАТЫ); 
+        server_name <Домен вашего сервиса>; # Например, server_name www.google.com
+
+        # ЕСЛИ СОЗДАЛИ САМОПОДПИСАННЫЕ СЕРТФИКАТЫ.
+        # пути к сертификатам
+        ssl_certificate /etc/nginx/ssl/nginx.crt;
+        ssl_certificate_key /etc/nginx/ssl/nginx.key;
 
         location / {
             proxy_pass <URI адрес gunicorn>; # Например: proxy_pass http://127.0.0.1:5000
